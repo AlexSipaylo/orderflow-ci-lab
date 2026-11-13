@@ -26,15 +26,30 @@ def available_promotions(subtotal: int, categories: Iterable[str]):
         yield promotion
 
 def apply_promotions(subtotal: int, codes: list[str], categories: Iterable[str]):
-    eligible = {p.code: p for p in available_promotions(subtotal, categories)}
+    eligible = {
+        p.code: p
+        for p in available_promotions(subtotal, categories)
+    }
+
     result = Decimal(subtotal)
     applied = []
+    seen_codes = set()
+
     for code in codes:
-        rule = eligible.get(code.upper())
+        normalized = code.upper()
+
+        if normalized in seen_codes:
+            continue
+
+        seen_codes.add(normalized)
+        rule = eligible.get(normalized)
+
         if rule is None:
             continue
+
         result *= Decimal(100 - rule.percent) / Decimal(100)
         applied.append(rule.code)
+
     return int(result.quantize(Decimal('1'), rounding=ROUND_HALF_UP)), applied
 
 def calculate_service_fee(subtotal: int, loyalty_tier: str, delivery_type: str):

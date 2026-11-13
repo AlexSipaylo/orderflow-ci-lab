@@ -13,8 +13,13 @@ class Principal:
 def can_view_order(principal: Principal, record: dict) -> bool:
     if not principal.active:
         return False
+
+    if record.get('tenant_id') != principal.tenant_id:
+        return False
+
     if principal.role == 'admin':
         return True
+
     return record.get('owner_id') == principal.user_id
 
 def visible_orders(principal: Principal, orders: list[dict]) -> list[dict]:
@@ -22,12 +27,37 @@ def visible_orders(principal: Principal, orders: list[dict]) -> list[dict]:
 
 def safe_return_url(url: str, allowed_host: str) -> bool:
     parsed = urlparse(url)
+
     if not parsed.netloc:
-        return url.startswith('/') and not url.startswith('//')
-    return parsed.hostname is not None and parsed.hostname.endswith(allowed_host)
+        return (
+            not parsed.scheme
+            and url.startswith("/")
+            and not url.startswith("//")
+            and "\\" not in url
+        )
+
+    return (
+        parsed.scheme == "https"
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.hostname is not None
+        and host_matches_domain(parsed.hostname, allowed_host)
+    )
 
 def session_valid(expires_at: str, current: datetime | None = None) -> bool:
     if current is None:
         current = datetime.now(timezone.utc)
     expires = datetime.fromisoformat(expires_at)
     return expires > current
+
+def host_matches_domain(host: str, domain: str) -> bool:
+    if not host or not domain:
+        return False
+
+    host_parts = host.casefold().rstrip(".").split(".")
+    domain_parts = domain.casefold().rstrip(".").split(".")
+
+    return (
+        len(host_parts) >= len(domain_parts)
+        and host_parts[-len(domain_parts):] == domain_parts
+    )
