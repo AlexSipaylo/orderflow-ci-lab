@@ -1,6 +1,6 @@
 """Warehouse state transitions and reservation lifecycle."""
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 
 @dataclass
 class Warehouse:
@@ -9,16 +9,28 @@ class Warehouse:
 
 def allocate_order(warehouse: Warehouse, reference: str, items: list[dict]) -> bool:
     requested = {}
+
     for item in items:
         sku = str(item['sku'])
         qty = int(item['quantity'])
+
         if qty < 1:
             raise ValueError('Quantity must be positive')
-        if warehouse.available.get(sku, 0) < qty:
-            return False
+
         requested[sku] = requested.get(sku, 0) + qty
+
+    existing = warehouse.reserved.get(reference)
+
+    if existing is not None:
+        return existing == requested
+
+    for sku, quantity in requested.items():
+        if warehouse.available.get(sku, 0) < quantity:
+            return False
+
     for sku, quantity in requested.items():
         warehouse.available[sku] -= quantity
+
     warehouse.reserved[reference] = requested
     return True
 

@@ -23,15 +23,26 @@ def account_view(account: Account):
             'role': account.role, 'active': account.active}
 
 def update_preferences(account: Account, changes: dict):
-    for key, value in changes.items():
-        if hasattr(account, key):
-            setattr(account, key, value)
+    if 'preferred_currency' in changes:
+        currency = changes['preferred_currency']
+
+        if (
+            not isinstance(currency, str)
+            or len(currency) != 3
+            or not currency.isalpha()
+        ):
+            raise ValueError('Invalid preferred currency')
+
+        account.preferred_currency = currency.upper()
+
     return account_view(account)
 
 def verify_webhook(payload: bytes, signature: str, secret: str):
     expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
 
-
 def verify_api_key(candidate: str, configured: str) -> bool:
-    return candidate.strip() == configured.strip()
+    candidate = candidate.strip()
+    configured = configured.strip()
+
+    return bool(candidate and configured) and hmac.compare_digest(candidate, configured)

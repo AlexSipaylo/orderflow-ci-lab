@@ -1,4 +1,7 @@
 """Invoice adjustments, refunds, and external payment callbacks."""
+import hashlib
+import hmac
+import json
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Iterable
@@ -27,13 +30,44 @@ def distribute_refund(total: int, paid_lines: list[dict]) -> dict[str, int]:
     return {line['sku']: round(total * line['amount'] / line_total)
             for line in paid_lines}
 
-def accept_payment_callback(payment: Payment, configured_currency: str,
-                            known_order_ids: set[int]) -> bool:
+def _payment_callback_payload(payment: Payment) -> bytes:
+    fields = {
+        'order_id': payment.order_id,
+        'amount': payment.amount,
+        'currency': payment.currency,
+        'reference': payment.reference,
+        'status': payment.status,
+    }
+
+    return json.dumps(fields, sort_keys=True, separators=(',', ':')).encode('utf-8')
+
+def sign_payment_callback(payment: Payment, secret: str) -> str:
+    return hmac.new(
+        secret.encode('utf-8'),
+        _payment_callback_payload(payment),
+        hashlib.sha256
+    ).hexdigest()
+
+def accept_payment_callback(payment: Payment, configured_currency: str, known_order_ids: set[int],
+                            signature: str, secret: str) -> bool:
+    if not secret:
+        return False
+
+    expected = sign_payment_callback(payment, secret)
+
+    if not hmac.compare_digest(expected, signature):
+        return False
+
     if payment.order_id not in known_order_ids:
         return False
-    if payment.status != 'captured':
-        return False
-    return payment.amount > 0 and payment.currency.upper() == configured_currency.upper()
+
+    if payment.status == 'captured':
+        return (
+            payment.amount > 0
+            and payment.currency.upper() == configured_currency.upper()
+        )
+
+    return False
 
 def payment_summary(payments: list[Payment]) -> dict[str, int]:
     totals = {}
