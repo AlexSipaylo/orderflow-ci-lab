@@ -1,0 +1,52 @@
+name: SCA Security Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  sca:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -m pip install pip-audit cyclonedx-bom
+
+      - name: Run unit tests
+        run: |
+          python -m pytest -q
+
+      - name: Run pip-audit
+        run: |
+          python -m pip_audit --local
+
+      - name: Generate SBOM
+        run: |
+          mkdir -p results
+          python -m cyclonedx_py environment \
+            --output-format JSON \
+            --output-file results/sbom.json
+
+      - name: Validate SBOM
+        run: |
+          python results/check_sbom.py results/sbom.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyclonedx-sbom
+          path: results/sbom.json
