@@ -2,7 +2,7 @@ name: SCA Security Check
 
 on:
   push:
-      branches: [main, "student/**", lab8-sca-fix-dependencies]
+    branches: [main, "student/**", lab8-sca-fix-dependencies]
   pull_request:
   workflow_dispatch:
 
